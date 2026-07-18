@@ -388,6 +388,12 @@ export default function App() {
   const handleAudioFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      const maxSizeBytes = 15 * 1024 * 1024; // 15MB limit
+      if (file.size > maxSizeBytes) {
+        setAnalysisError(`File is too large (${(file.size / (1024 * 1024)).toFixed(1)}MB). Please upload an audio file under 15MB to prevent network timeouts.`);
+        triggerFeedback("File exceeded size limit");
+        return;
+      }
       setAudioBlob(file);
       setAudioUrl(URL.createObjectURL(file));
       setAudioFileName(file.name);
@@ -423,8 +429,26 @@ export default function App() {
       });
 
       if (!response.ok) {
-        const errJson = await response.json();
-        throw new Error(errJson.error || "Failed to analyze audio");
+        let errMsg = `Server returned status ${response.status}`;
+        try {
+          const errJson = await response.json();
+          errMsg = errJson.error || errMsg;
+        } catch (e) {
+          try {
+            const rawText = await response.text();
+            if (rawText && rawText.includes("<body") || rawText.includes("<html")) {
+              const match = rawText.match(/<title>(.*?)<\/title>/i) || rawText.match(/<h1>(.*?)<\/h1>/i);
+              if (match && match[1]) {
+                errMsg = `Server Error (${response.status}): ${match[1].trim()}`;
+              } else {
+                errMsg = `Server Error (${response.status}): HTML response. Check if backend is active.`;
+              }
+            } else if (rawText) {
+              errMsg = rawText.substring(0, 200);
+            }
+          } catch (e2) {}
+        }
+        throw new Error(errMsg);
       }
 
       const result: AnalysisResult = await response.json();
@@ -479,8 +503,26 @@ export default function App() {
       });
 
       if (!response.ok) {
-        const errJson = await response.json();
-        throw new Error(errJson.error || "Failed to analyze transcript");
+        let errMsg = `Server returned status ${response.status}`;
+        try {
+          const errJson = await response.json();
+          errMsg = errJson.error || errMsg;
+        } catch (e) {
+          try {
+            const rawText = await response.text();
+            if (rawText && rawText.includes("<body") || rawText.includes("<html")) {
+              const match = rawText.match(/<title>(.*?)<\/title>/i) || rawText.match(/<h1>(.*?)<\/h1>/i);
+              if (match && match[1]) {
+                errMsg = `Server Error (${response.status}): ${match[1].trim()}`;
+              } else {
+                errMsg = `Server Error (${response.status}): HTML response. Check if backend is active.`;
+              }
+            } else if (rawText) {
+              errMsg = rawText.substring(0, 200);
+            }
+          } catch (e2) {}
+        }
+        throw new Error(errMsg);
       }
 
       const result: AnalysisResult = await response.json();
