@@ -1,0 +1,6 @@
+{
+  "name": "AI Listening Companion",
+  "description": "Trợ lý học tiếng Anh thông minh hỗ trợ thu âm, chuyển giọng nói thành văn bản, dự đoán đáp án đề thi và tự động tạo flashcard học từ vựng.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
