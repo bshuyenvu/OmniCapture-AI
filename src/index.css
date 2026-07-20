@@ -6,10 +6,66 @@
   --font-display: "Space Grotesk", sans-serif;
 }
 
+/* Theme variables */
+:root {
+  --bg-app: #f8fafc;
+  --text-app: #1e293b;
+  --text-muted: #64748b;
+  --text-title: #0f172a;
+  --text-sub: #334155;
+  --card-bg: rgba(255, 255, 255, 0.92);
+  --card-border: rgba(226, 232, 240, 0.9);
+  --nested-bg: rgba(241, 245, 249, 0.7);
+  --nested-border: rgba(226, 232, 240, 0.6);
+  --nested-light-bg: rgba(248, 250, 252, 0.9);
+  --nested-light-border: rgba(226, 232, 240, 0.5);
+  --btn-sec-bg: rgba(226, 232, 240, 0.8);
+  --btn-sec-hover: rgba(203, 213, 225, 0.9);
+  --btn-sec-text: #334155;
+  --border-light: rgba(226, 232, 240, 0.5);
+  --header-bg: rgba(255, 255, 255, 0.85);
+  --badge-bg: rgba(239, 246, 255, 0.9);
+  --badge-text: #2563eb;
+  --badge-border: rgba(219, 234, 254, 0.8);
+  --history-item-bg: rgba(255, 255, 255, 0.7);
+  --history-item-border: rgba(226, 232, 240, 0.7);
+  --history-item-hover: rgba(241, 245, 249, 0.9);
+  --history-text: #475569;
+  --shadow-color: rgba(148, 163, 184, 0.08);
+}
+
+.dark {
+  --bg-app: #070b13;
+  --text-app: #e2e8f0;
+  --text-muted: #94a3b8;
+  --text-title: #ffffff;
+  --text-sub: #cbd5e1;
+  --card-bg: rgba(255, 255, 255, 0.05);
+  --card-border: rgba(255, 255, 255, 0.1);
+  --nested-bg: rgba(2, 6, 23, 0.35);
+  --nested-border: rgba(255, 255, 255, 0.05);
+  --nested-light-bg: rgba(15, 23, 42, 0.4);
+  --nested-light-border: rgba(255, 255, 255, 0.05);
+  --btn-sec-bg: rgba(255, 255, 255, 0.1);
+  --btn-sec-hover: rgba(255, 255, 255, 0.15);
+  --btn-sec-text: #cbd5e1;
+  --border-light: rgba(255, 255, 255, 0.05);
+  --header-bg: rgba(255, 255, 255, 0.05);
+  --badge-bg: rgba(99, 102, 241, 0.2);
+  --badge-text: #a5b4fc;
+  --badge-border: rgba(99, 102, 241, 0.3);
+  --history-item-bg: rgba(255, 255, 255, 0.05);
+  --history-item-border: rgba(255, 255, 255, 0.05);
+  --history-item-hover: rgba(255, 255, 255, 0.1);
+  --history-text: #cbd5e1;
+  --shadow-color: rgba(0, 0, 0, 0.5);
+}
+
 body {
   font-family: var(--font-sans);
-  background-color: #fafafa;
-  color: #171717;
+  background-color: var(--bg-app);
+  color: var(--text-app);
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* Custom scrollbar styling */

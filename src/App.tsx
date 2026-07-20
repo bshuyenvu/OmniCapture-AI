@@ -25,7 +25,9 @@ import {
   Check, 
   GraduationCap, 
   BookMarked,
-  ArrowRightLeft
+  ArrowRightLeft,
+  Sun,
+  Moon
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { AnalysisResult, SavedSession, Vocabulary, Prediction } from "./types";
@@ -208,6 +210,20 @@ const SAMPLE_TEMPLATES = [
 
 export default function App() {
   // Application State
+  const [theme, setTheme] = useState<"dark" | "light">(() => {
+    const saved = localStorage.getItem("omni_capture_theme");
+    return (saved as "dark" | "light") || "dark";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("omni_capture_theme", theme);
+    if (theme === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  }, [theme]);
+
   const [activeTab, setActiveTab] = useState<"capture" | "transcript" | "predictions" | "vocabulary" | "notion-anki">("capture");
   const [pipelineStep, setPipelineStep] = useState<number>(1); // 1: Capture, 2: Whisper, 3: Analysis, 4: Flashcards
   
@@ -326,11 +342,24 @@ export default function App() {
       };
 
       recorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/wav" });
+        const recordedMimeType = recorder.mimeType || "audio/webm";
+        const audioBlob = new Blob(audioChunksRef.current, { type: recordedMimeType });
         const audioUrl = URL.createObjectURL(audioBlob);
         setAudioBlob(audioBlob);
         setAudioUrl(audioUrl);
-        setAudioFileName(`Live_Capture_${new Date().toLocaleTimeString().replace(/:/g, "-")}.wav`);
+        
+        let ext = "webm";
+        if (recordedMimeType.includes("wav")) {
+          ext = "wav";
+        } else if (recordedMimeType.includes("mp4") || recordedMimeType.includes("m4a")) {
+          ext = "m4a";
+        } else if (recordedMimeType.includes("ogg")) {
+          ext = "ogg";
+        } else if (recordedMimeType.includes("aac")) {
+          ext = "aac";
+        }
+        
+        setAudioFileName(`Live_Capture_${new Date().toLocaleTimeString().replace(/:/g, "-")}.${ext}`);
         setPipelineStep(2); // Progress to Whisper transcription stage
       };
 
@@ -665,6 +694,18 @@ export default function App() {
     triggerFeedback("Anki CSV Deck file downloaded. You can import this directly in Anki!");
   };
 
+  // Download the captured/recorded audio file
+  const downloadAudioFile = () => {
+    if (!audioUrl) return;
+    const link = document.createElement("a");
+    link.href = audioUrl;
+    link.download = audioFileName || "captured_audio.wav";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    triggerFeedback("Downloaded captured audio file successfully!");
+  };
+
   // Copy Notion formatted Markdown
   const copyNotionMarkdown = () => {
     if (!currentResult) return;
@@ -705,9 +746,9 @@ ${currentResult.keyTakeaways.map(t => `- ${t}`).join("\n")}
   };
 
   return (
-    <div className="min-h-screen bg-[#070b13] text-slate-100 font-sans relative overflow-x-hidden flex flex-col selection:bg-indigo-500/30 selection:text-white">
+    <div className={`min-h-screen bg-[var(--bg-app)] text-[var(--text-app)] font-sans relative overflow-x-hidden flex flex-col selection:bg-indigo-500/30 selection:text-white transition-colors duration-300 ${theme}`}>
       {/* Dynamic colorful mesh gradient background blobs */}
-      <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
+      <div className={`absolute inset-0 z-0 pointer-events-none overflow-hidden transition-opacity duration-500 ${theme === "dark" ? "opacity-100" : "opacity-30"}`}>
         <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-blue-600/15 rounded-full blur-[140px] animate-pulse" style={{ animationDuration: "12s" }}></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-[700px] h-[700px] bg-indigo-600/15 rounded-full blur-[150px] animate-pulse" style={{ animationDuration: "16s" }}></div>
         <div className="absolute top-[25%] right-[15%] w-[450px] h-[450px] bg-purple-600/10 rounded-full blur-[120px] animate-pulse" style={{ animationDuration: "10s" }}></div>
@@ -735,29 +776,47 @@ ${currentResult.keyTakeaways.map(t => `- ${t}`).join("\n")}
       <div className="relative z-10 max-w-[1400px] mx-auto w-full px-4 lg:px-6 py-5 flex flex-col flex-grow gap-5">
         
         {/* Dynamic Translucent Header */}
-        <header className="flex flex-col md:flex-row items-stretch md:items-center justify-between p-5 rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 shadow-2xl gap-4">
+        <header className="flex flex-col md:flex-row items-stretch md:items-center justify-between p-5 rounded-2xl bg-[var(--card-bg)] backdrop-blur-xl border border-[var(--card-border)] shadow-2xl gap-4 transition-all duration-300">
           <div className="flex items-center space-x-3.5">
             <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-600/40 border border-indigo-400/30">
               <Mic className="h-6 w-6 text-white animate-bounce" style={{ animationDuration: "3s" }} />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-black tracking-tight text-white font-display">OmniCapture AI</h1>
-                <span className="text-[10px] bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 px-2 py-0.5 rounded-full font-bold">LMS Companion</span>
+                <h1 className="text-2xl font-black tracking-tight text-[var(--text-title)] font-display">OmniCapture AI</h1>
+                <span className="text-[10px] bg-indigo-500/20 text-indigo-500 dark:text-indigo-400 border border-indigo-500/30 px-2 py-0.5 rounded-full font-bold">LMS Companion</span>
               </div>
-              <p className="text-xs text-slate-400 font-semibold tracking-wider uppercase">Advanced AI Listening, Prediction & Vocab Engine</p>
+              <p className="text-xs text-[var(--text-muted)] font-semibold tracking-wider uppercase">Advanced AI Listening, Prediction & Vocab Engine</p>
             </div>
           </div>
 
           <div className="flex items-center gap-3 flex-wrap">
             {/* Status indicator badge */}
-            <div className="flex items-center space-x-2.5 bg-emerald-500/10 text-emerald-400 px-4 py-2 rounded-xl border border-emerald-500/20 text-xs font-medium">
+            <div className="flex items-center space-x-2.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-4 py-2 rounded-xl border border-emerald-500/20 text-xs font-medium">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
               </span>
               <span>Online Engine: Whisper-v3 & Gemini 3.5</span>
             </div>
+
+            {/* Theme Toggle Button */}
+            <button
+              id="theme-toggle-btn"
+              onClick={() => {
+                const nextTheme = theme === "dark" ? "light" : "dark";
+                setTheme(nextTheme);
+                triggerFeedback(`Switched to ${nextTheme === "dark" ? "Dark Mode" : "Light Mode"}`);
+              }}
+              className="p-2.5 bg-[var(--btn-sec-bg)] hover:bg-[var(--btn-sec-hover)] text-[var(--text-app)] rounded-xl border border-[var(--card-border)] transition-all flex items-center justify-center shadow-md cursor-pointer hover:scale-105 active:scale-95 shrink-0"
+              title={theme === "dark" ? "Chuyển sang Giao diện sáng (Switch to Light Mode)" : "Chuyển sang Giao diện tối (Switch to Dark Mode)"}
+            >
+              {theme === "dark" ? (
+                <Sun className="h-4.5 w-4.5 text-amber-400 animate-pulse" />
+              ) : (
+                <Moon className="h-4.5 w-4.5 text-indigo-600" />
+              )}
+            </button>
 
             {currentResult && (
               <button 
@@ -769,7 +828,7 @@ ${currentResult.keyTakeaways.map(t => `- ${t}`).join("\n")}
                   setActiveTab("capture");
                   triggerFeedback("Started clean capture workspace");
                 }}
-                className="px-4 py-2 bg-white/10 hover:bg-white/15 text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all border border-white/10 flex items-center gap-2"
+                className="px-4 py-2 bg-[var(--btn-sec-bg)] hover:bg-[var(--btn-sec-hover)] text-[var(--text-app)] rounded-xl text-xs font-bold transition-all border border-[var(--card-border)] flex items-center gap-2"
               >
                 <Plus className="w-3.5 h-3.5" />
                 New Capture
@@ -785,10 +844,10 @@ ${currentResult.keyTakeaways.map(t => `- ${t}`).join("\n")}
           <aside className="lg:col-span-3 flex flex-col gap-5">
             
             {/* AI pipeline workflow progress card */}
-            <div className="p-5 bg-white/5 backdrop-blur-md rounded-2xl border border-white/10 flex flex-col shadow-xl">
-              <div className="flex items-center justify-between mb-4 border-b border-white/5 pb-2">
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                  <Compass className="w-4 h-4 text-indigo-400" />
+            <div className="p-5 bg-[var(--card-bg)] backdrop-blur-md rounded-2xl border border-[var(--card-border)] flex flex-col shadow-xl transition-all duration-300">
+              <div className="flex items-center justify-between mb-4 border-b border-[var(--border-light)] pb-2">
+                <h3 className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-widest flex items-center gap-2">
+                  <Compass className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
                   AI Pipeline Process
                 </h3>
                 <span className="text-[10px] bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full font-mono font-bold">Step {pipelineStep}/4</span>
@@ -796,71 +855,71 @@ ${currentResult.keyTakeaways.map(t => `- ${t}`).join("\n")}
 
               <div className="space-y-3.5">
                 {/* Step 1 */}
-                <div className={`flex items-center p-3 rounded-xl border transition-all ${pipelineStep >= 1 ? "bg-indigo-950/25 border-indigo-500/30 text-white" : "bg-white/5 border-white/5 opacity-55 text-slate-400"}`}>
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black mr-3 ${pipelineStep >= 1 ? "bg-indigo-600 text-white" : "bg-slate-800 text-slate-500"}`}>
+                <div className={`flex items-center p-3 rounded-xl border transition-all ${pipelineStep >= 1 ? "bg-indigo-500/10 dark:bg-indigo-950/25 border-indigo-500/30 text-indigo-950 dark:text-white" : "bg-[var(--nested-bg)] border-[var(--nested-border)] opacity-55 text-[var(--text-muted)]"}`}>
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black mr-3 ${pipelineStep >= 1 ? "bg-indigo-600 text-white" : "bg-slate-200 dark:bg-slate-800 text-slate-500"}`}>
                     01
                   </div>
                   <div className="flex-1">
                     <p className="text-xs font-bold">AI Audio Capture</p>
-                    <p className="text-[9px] text-slate-400">Record micro or file upload</p>
+                    <p className="text-[9px] text-[var(--text-muted)]">Record micro or file upload</p>
                   </div>
-                  {pipelineStep > 1 && <CheckCircle2 className="w-4 h-4 text-emerald-400 ml-auto" />}
+                  {pipelineStep > 1 && <CheckCircle2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400 ml-auto" />}
                 </div>
 
                 {/* Step 2 */}
-                <div className={`flex items-center p-3 rounded-xl border transition-all ${pipelineStep >= 2 ? "bg-indigo-950/25 border-indigo-500/30 text-white" : "bg-white/5 border-white/5 opacity-55 text-slate-400"}`}>
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black mr-3 ${pipelineStep >= 2 ? "bg-indigo-600 text-white" : "bg-slate-800 text-slate-500"}`}>
+                <div className={`flex items-center p-3 rounded-xl border transition-all ${pipelineStep >= 2 ? "bg-indigo-500/10 dark:bg-indigo-950/25 border-indigo-500/30 text-indigo-950 dark:text-white" : "bg-[var(--nested-bg)] border-[var(--nested-border)] opacity-55 text-[var(--text-muted)]"}`}>
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black mr-3 ${pipelineStep >= 2 ? "bg-indigo-600 text-white" : "bg-slate-200 dark:bg-slate-800 text-slate-500"}`}>
                     02
                   </div>
                   <div className="flex-1">
                     <p className="text-xs font-bold">Whisper STT Engine</p>
-                    <p className="text-[9px] text-slate-400">High-precision transcription</p>
+                    <p className="text-[9px] text-[var(--text-muted)]">High-precision transcription</p>
                   </div>
-                  {pipelineStep > 2 && <CheckCircle2 className="w-4 h-4 text-emerald-400 ml-auto" />}
-                  {pipelineStep === 2 && isAnalyzing && <RefreshCw className="w-3.5 h-3.5 text-indigo-400 animate-spin ml-auto" />}
+                  {pipelineStep > 2 && <CheckCircle2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400 ml-auto" />}
+                  {pipelineStep === 2 && isAnalyzing && <RefreshCw className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400 animate-spin ml-auto" />}
                 </div>
 
                 {/* Step 3 */}
-                <div className={`flex items-center p-3 rounded-xl border transition-all ${pipelineStep >= 3 ? "bg-indigo-950/25 border-indigo-500/30 text-white" : "bg-white/5 border-white/5 opacity-55 text-slate-400"}`}>
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black mr-3 ${pipelineStep >= 3 ? "bg-indigo-600 text-white" : "bg-slate-800 text-slate-500"}`}>
+                <div className={`flex items-center p-3 rounded-xl border transition-all ${pipelineStep >= 3 ? "bg-indigo-500/10 dark:bg-indigo-950/25 border-indigo-500/30 text-indigo-950 dark:text-white" : "bg-[var(--nested-bg)] border-[var(--nested-border)] opacity-55 text-[var(--text-muted)]"}`}>
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black mr-3 ${pipelineStep >= 3 ? "bg-indigo-600 text-white" : "bg-slate-200 dark:bg-slate-800 text-slate-500"}`}>
                     03
                   </div>
                   <div className="flex-1">
                     <p className="text-xs font-bold">GPT Analysis & Answers</p>
-                    <p className="text-[9px] text-slate-400">Predict answers & translate clues</p>
+                    <p className="text-[9px] text-[var(--text-muted)]">Predict answers & translate clues</p>
                   </div>
-                  {pipelineStep > 3 && <CheckCircle2 className="w-4 h-4 text-emerald-400 ml-auto" />}
-                  {pipelineStep === 3 && isAnalyzing && <RefreshCw className="w-3.5 h-3.5 text-indigo-400 animate-spin ml-auto" />}
+                  {pipelineStep > 3 && <CheckCircle2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400 ml-auto" />}
+                  {pipelineStep === 3 && isAnalyzing && <RefreshCw className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400 animate-spin ml-auto" />}
                 </div>
 
                 {/* Step 4 */}
-                <div className={`flex items-center p-3 rounded-xl border transition-all ${pipelineStep >= 4 ? "bg-indigo-950/25 border-indigo-500/30 text-white" : "bg-white/5 border-white/5 opacity-55 text-slate-400"}`}>
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black mr-3 ${pipelineStep >= 4 ? "bg-indigo-600 text-white" : "bg-slate-800 text-slate-500"}`}>
+                <div className={`flex items-center p-3 rounded-xl border transition-all ${pipelineStep >= 4 ? "bg-indigo-500/10 dark:bg-indigo-950/25 border-indigo-500/30 text-indigo-950 dark:text-white" : "bg-[var(--nested-bg)] border-[var(--nested-border)] opacity-55 text-[var(--text-muted)]"}`}>
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black mr-3 ${pipelineStep >= 4 ? "bg-indigo-600 text-white" : "bg-slate-200 dark:bg-slate-800 text-slate-500"}`}>
                     04
                   </div>
                   <div className="flex-1">
                     <p className="text-xs font-bold">Flashcard Generator</p>
-                    <p className="text-[9px] text-slate-400">Notion / Anki sync active</p>
+                    <p className="text-[9px] text-[var(--text-muted)]">Notion / Anki sync active</p>
                   </div>
-                  {pipelineStep >= 4 && <CheckCircle2 className="w-4 h-4 text-emerald-400 ml-auto" />}
+                  {pipelineStep >= 4 && <CheckCircle2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400 ml-auto" />}
                 </div>
               </div>
             </div>
 
             {/* Past saved sessions list (Persistent Learning History) */}
-            <div className="p-5 bg-white/5 backdrop-blur-md rounded-2xl border border-white/10 flex flex-col shadow-xl flex-grow max-h-[380px] lg:max-h-none overflow-hidden">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center justify-between">
+            <div className="p-5 bg-[var(--card-bg)] backdrop-blur-md rounded-2xl border border-[var(--card-border)] flex flex-col shadow-xl flex-grow max-h-[380px] lg:max-h-none overflow-hidden transition-all duration-300">
+              <h3 className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-widest mb-3 flex items-center justify-between">
                 <span className="flex items-center gap-2">
-                  <BookMarked className="w-4 h-4 text-indigo-400" />
+                  <BookMarked className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
                   Learning History
                 </span>
-                <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded font-bold">{savedSessions.length} sessions</span>
+                <span className="text-[10px] bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-2 py-0.5 rounded font-bold">{savedSessions.length} sessions</span>
               </h3>
 
               {savedSessions.length === 0 ? (
-                <div className="flex-grow flex flex-col items-center justify-center py-8 text-center bg-slate-900/40 rounded-xl border border-dashed border-white/5 p-4">
-                  <Layers className="w-8 h-8 text-slate-600 mb-2.5" />
-                  <p className="text-xs text-slate-400 font-medium">No sessions saved yet</p>
+                <div className="flex-grow flex flex-col items-center justify-center py-8 text-center bg-[var(--nested-bg)] rounded-xl border border-dashed border-[var(--nested-border)] p-4">
+                  <Layers className="w-8 h-8 text-slate-400 dark:text-slate-600 mb-2.5" />
+                  <p className="text-xs text-[var(--text-muted)] font-medium">No sessions saved yet</p>
                   <p className="text-[10px] text-slate-500 mt-1 max-w-[180px]">Your completed audio analyses will appear here automatically.</p>
                 </div>
               ) : (
@@ -874,15 +933,15 @@ ${currentResult.keyTakeaways.map(t => `- ${t}`).join("\n")}
                         setActiveTab("transcript");
                         triggerFeedback(`Switched to saved session: ${session.title}`);
                       }}
-                      className={`group p-3 rounded-xl border text-left cursor-pointer transition-all flex items-start gap-2.5 ${currentResult?.id === session.id ? "bg-indigo-600/15 border-indigo-500/40 text-white" : "bg-white/5 border-white/5 hover:bg-white/10 text-slate-300 hover:text-white"}`}
+                      className={`group p-3 rounded-xl border text-left cursor-pointer transition-all flex items-start gap-2.5 ${currentResult?.id === session.id ? "bg-indigo-600/15 border-indigo-500/40 text-[var(--text-title)]" : "bg-[var(--history-item-bg)] border-[var(--history-item-border)] hover:bg-[var(--history-item-hover)] text-[var(--history-text)]"}`}
                     >
-                      <div className="w-6 h-6 rounded-lg bg-indigo-500/10 flex items-center justify-center text-xs font-bold text-indigo-300 mt-0.5 group-hover:bg-indigo-500/25">
+                      <div className="w-6 h-6 rounded-lg bg-indigo-500/10 flex items-center justify-center text-xs font-bold text-indigo-600 dark:text-indigo-300 mt-0.5 group-hover:bg-indigo-500/25">
                         <FileText className="w-3.5 h-3.5" />
                       </div>
                       <div className="flex-grow min-w-0">
-                        <p className="text-xs font-bold truncate pr-1">{session.title}</p>
+                        <p className="text-xs font-bold truncate pr-1 text-[var(--text-title)]">{session.title}</p>
                         <p className="text-[9px] text-slate-500 mt-0.5 font-mono">{session.timestamp}</p>
-                        <p className="text-[10px] text-slate-400 line-clamp-1 mt-1 leading-normal italic">
+                        <p className="text-[10px] text-[var(--text-muted)] line-clamp-1 mt-1 leading-normal italic">
                           {session.summary}
                         </p>
                       </div>
@@ -905,33 +964,60 @@ ${currentResult.keyTakeaways.map(t => `- ${t}`).join("\n")}
             
             {/* If analyzed results exist, show interactive multi-tab outputs */}
             {currentResult ? (
-              <div className="bg-white/5 backdrop-blur-md rounded-2xl border border-white/10 flex flex-col shadow-xl flex-grow overflow-hidden">
+              <div className="bg-[var(--card-bg)] backdrop-blur-md rounded-2xl border border-[var(--card-border)] flex flex-col shadow-xl flex-grow overflow-hidden transition-all duration-300">
+                {audioUrl && (
+                  <div className="px-5 py-3.5 bg-[var(--nested-bg)] border-b border-[var(--card-border)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-9 h-9 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-500 dark:text-indigo-400 shrink-0">
+                        <FileAudio className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-[var(--text-title)] truncate">{audioFileName}</p>
+                        <p className="text-[10px] text-indigo-600 dark:text-indigo-300 font-semibold">Recorded/Uploaded Session Track</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-3 shrink-0 justify-between sm:justify-start w-full sm:w-auto">
+                      <audio src={audioUrl} controls className="h-8 max-w-[200px] sm:max-w-xs scale-90 origin-right rounded-lg" />
+                      
+                      <button
+                        onClick={downloadAudioFile}
+                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-lg shadow-indigo-600/25 border border-indigo-500/30 shrink-0 cursor-pointer"
+                        title="Tải xuống file âm thanh ghi âm này (Download Audio)"
+                      >
+                        <FileDown className="w-3.5 h-3.5" />
+                        <span>Tải file</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {/* Translucent internal Tab Switcher */}
-                <div className="flex border-b border-white/10 bg-slate-950/20 p-2 gap-1 overflow-x-auto">
+                <div className="flex border-b border-[var(--border-light)] bg-[var(--nested-bg)] p-2 gap-1 overflow-x-auto">
                   <button
                     onClick={() => setActiveTab("transcript")}
-                    className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${activeTab === "transcript" ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/25" : "text-slate-400 hover:text-slate-200 hover:bg-white/5"}`}
+                    className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${activeTab === "transcript" ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/25" : "text-[var(--text-muted)] hover:text-[var(--text-title)] hover:bg-[var(--btn-sec-bg)]"}`}
                   >
                     <FileText className="w-3.5 h-3.5" />
                     Transcript ({Math.round(currentResult.transcript.split(/\s+/).length)} words)
                   </button>
                   <button
                     onClick={() => setActiveTab("predictions")}
-                    className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${activeTab === "predictions" ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/25" : "text-slate-400 hover:text-slate-200 hover:bg-white/5"}`}
+                    className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${activeTab === "predictions" ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/25" : "text-[var(--text-muted)] hover:text-[var(--text-title)] hover:bg-[var(--btn-sec-bg)]"}`}
                   >
                     <Award className="w-3.5 h-3.5" />
                     Answers & Clues ({currentResult.predictions.length})
                   </button>
                   <button
                     onClick={() => setActiveTab("vocabulary")}
-                    className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${activeTab === "vocabulary" ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/25" : "text-slate-400 hover:text-slate-200 hover:bg-white/5"}`}
+                    className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${activeTab === "vocabulary" ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/25" : "text-[var(--text-muted)] hover:text-[var(--text-title)] hover:bg-[var(--btn-sec-bg)]"}`}
                   >
                     <GraduationCap className="w-3.5 h-3.5" />
                     Vocab Flashcards ({currentResult.vocabulary.length})
                   </button>
                   <button
                     onClick={() => setActiveTab("notion-anki")}
-                    className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${activeTab === "notion-anki" ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/25" : "text-slate-400 hover:text-slate-200 hover:bg-white/5"}`}
+                    className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${activeTab === "notion-anki" ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/25" : "text-[var(--text-muted)] hover:text-[var(--text-title)] hover:bg-[var(--btn-sec-bg)]"}`}
                   >
                     <ArrowRightLeft className="w-3.5 h-3.5" />
                     Sync & Export
@@ -949,22 +1035,22 @@ ${currentResult.keyTakeaways.map(t => `- ${t}`).join("\n")}
                       className="space-y-5"
                     >
                       {/* Summary Block */}
-                      <div className="p-4 bg-indigo-600/10 rounded-xl border border-indigo-500/20">
-                        <h4 className="text-xs font-bold text-indigo-300 uppercase tracking-wider mb-1.5 flex items-center gap-2">
+                      <div className="p-4 bg-indigo-500/10 dark:bg-indigo-600/10 rounded-xl border border-indigo-500/20">
+                        <h4 className="text-xs font-bold text-indigo-600 dark:text-indigo-300 uppercase tracking-wider mb-1.5 flex items-center gap-2">
                           <Sparkles className="w-3.5 h-3.5" />
                           Vietnamese Summary (Tóm tắt tiếng Việt)
                         </h4>
-                        <p className="text-xs text-indigo-100 leading-relaxed font-medium">
+                        <p className="text-xs text-indigo-900 dark:text-indigo-100 leading-relaxed font-medium">
                           {currentResult.summary}
                         </p>
                       </div>
 
                       {/* Full Text Display */}
                       <div>
-                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">
+                        <h4 className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-widest mb-3">
                           High-Precision English Transcript
                         </h4>
-                        <div className="bg-slate-950/40 p-4 rounded-xl border border-white/5 font-serif text-sm leading-relaxed text-slate-200 whitespace-pre-line select-text">
+                        <div className="bg-[var(--nested-light-bg)] p-4 rounded-xl border border-[var(--nested-light-border)] font-serif text-sm leading-relaxed text-[var(--text-app)] whitespace-pre-line select-text">
                           {currentResult.transcript}
                         </div>
                       </div>
@@ -972,13 +1058,13 @@ ${currentResult.keyTakeaways.map(t => `- ${t}`).join("\n")}
                       {/* Strategic Takeaways list */}
                       {currentResult.keyTakeaways && currentResult.keyTakeaways.length > 0 && (
                         <div className="space-y-2.5 pt-2">
-                          <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                          <h4 className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-widest">
                             Phonetic Clues & Listening Tips (Bí quyết phát âm & nghe hiểu)
                           </h4>
                           <div className="grid grid-cols-1 gap-2">
                             {currentResult.keyTakeaways.map((tip, i) => (
-                              <div key={i} className="flex gap-2.5 p-3 rounded-xl bg-white/5 border border-white/5 text-xs text-slate-300 items-start">
-                                <span className="w-5 h-5 rounded bg-indigo-600/20 text-indigo-300 flex items-center justify-center font-bold text-[10px] mt-0.5">
+                              <div key={i} className="flex gap-2.5 p-3 rounded-xl bg-[var(--nested-bg)] border border-[var(--nested-border)] text-xs text-[var(--text-sub)] items-start">
+                                <span className="w-5 h-5 rounded bg-indigo-500/10 dark:bg-indigo-600/20 text-indigo-600 dark:text-indigo-300 flex items-center justify-center font-bold text-[10px] mt-0.5">
                                   {i + 1}
                                 </span>
                                 <p className="leading-normal flex-1 font-medium">{tip}</p>
@@ -998,61 +1084,61 @@ ${currentResult.keyTakeaways.map(t => `- ${t}`).join("\n")}
                       className="space-y-4"
                     >
                       <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                        <h4 className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-widest">
                           Pedagogical Answer Predictions & Clues
                         </h4>
-                        <span className="text-[10px] bg-slate-900 text-slate-400 px-2 py-1 rounded border border-white/5">
+                        <span className="text-[10px] bg-[var(--nested-bg)] text-[var(--text-sub)] px-2 py-1 rounded border border-[var(--border-light)]">
                           Targeted Questions: {currentResult.predictions.length}
                         </span>
                       </div>
 
                       {currentResult.predictions.length === 0 ? (
-                        <div className="py-12 text-center bg-slate-900/40 rounded-xl border border-dashed border-white/5">
-                          <p className="text-xs text-slate-400">No question predictions were generated for this text.</p>
+                        <div className="py-12 text-center bg-[var(--nested-bg)] rounded-xl border border-dashed border-[var(--border-light)]">
+                          <p className="text-xs text-[var(--text-muted)]">No question predictions were generated for this text.</p>
                         </div>
                       ) : (
                         <div className="space-y-3.5">
                           {currentResult.predictions.map((p, idx) => (
-                            <div key={idx} className="p-4 bg-white/5 rounded-xl border border-white/10 flex flex-col gap-3">
+                            <div key={idx} className="p-4 bg-[var(--nested-bg)] rounded-xl border border-[var(--nested-border)] flex flex-col gap-3">
                               
                               <div className="flex items-start justify-between gap-3">
                                 <div className="flex gap-3">
-                                  <div className="w-7 h-7 bg-indigo-600/20 text-indigo-300 rounded-lg flex items-center justify-center font-bold text-xs shrink-0">
+                                  <div className="w-7 h-7 bg-indigo-500/10 dark:bg-indigo-600/20 text-indigo-600 dark:text-indigo-300 rounded-lg flex items-center justify-center font-bold text-xs shrink-0">
                                     Q{p.questionNumber}
                                   </div>
                                   <div>
-                                    <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Question Context</p>
-                                    <p className="text-sm font-bold text-white leading-snug mt-0.5">{p.questionText}</p>
+                                    <p className="text-xs text-[var(--text-muted)] font-semibold uppercase tracking-wider">Question Context</p>
+                                    <p className="text-sm font-bold text-[var(--text-title)] leading-snug mt-0.5">{p.questionText}</p>
                                   </div>
                                 </div>
 
                                 <div className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider border ${
                                   p.confidence === "high" 
-                                    ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" 
+                                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20" 
                                     : p.confidence === "medium"
-                                    ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
-                                    : "bg-red-500/10 text-red-400 border-red-500/20"
+                                    ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
+                                    : "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20"
                                 }`}>
                                   {p.confidence} match
                                 </div>
                               </div>
 
-                              <div className="bg-indigo-600/10 p-3 rounded-lg border border-indigo-500/20 flex items-center justify-between gap-3">
+                              <div className="bg-indigo-500/10 dark:bg-indigo-600/10 p-3 rounded-lg border border-indigo-500/20 flex items-center justify-between gap-3">
                                 <div>
-                                  <span className="text-[10px] font-semibold text-indigo-300 uppercase block tracking-wider">Predicted Correct Answer:</span>
-                                  <span className="text-sm font-bold text-white leading-normal font-mono">{p.predictedAnswer}</span>
+                                  <span className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-300 uppercase block tracking-wider">Predicted Correct Answer:</span>
+                                  <span className="text-sm font-bold text-[var(--text-title)] leading-normal font-mono">{p.predictedAnswer}</span>
                                 </div>
-                                <div className="w-6 h-6 rounded-full bg-indigo-500/15 flex items-center justify-center text-indigo-300 text-xs font-black">
+                                <div className="w-6 h-6 rounded-full bg-indigo-500/15 flex items-center justify-center text-indigo-600 dark:text-indigo-300 text-xs font-black">
                                   ✓
                                 </div>
                               </div>
 
-                              <div className="text-xs bg-slate-900/40 p-3 rounded-lg border border-white/5">
-                                <div className="flex items-center gap-1.5 text-slate-400 font-bold mb-1.5">
-                                  <Info className="w-3.5 h-3.5 text-indigo-400" />
+                              <div className="text-xs bg-[var(--nested-light-bg)] p-3 rounded-lg border border-[var(--nested-light-border)]">
+                                <div className="flex items-center gap-1.5 text-[var(--text-muted)] font-bold mb-1.5">
+                                  <Info className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
                                   <span>Giải thích chi tiết (Supportive Explanation)</span>
                                 </div>
-                                <p className="text-slate-300 leading-relaxed font-medium">
+                                <p className="text-[var(--text-sub)] leading-relaxed font-medium">
                                   {p.explanation}
                                 </p>
                               </div>
@@ -1073,23 +1159,23 @@ ${currentResult.keyTakeaways.map(t => `- ${t}`).join("\n")}
                     >
                       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
                         <div>
-                          <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                          <h4 className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-widest">
                             Interactive Flipping Flashcards
                           </h4>
-                          <p className="text-[10px] text-slate-500 mt-0.5">Click a card to reveal Vietnamese translations and usage examples.</p>
+                          <p className="text-[10px] text-[var(--text-muted)] mt-0.5">Click a card to reveal Vietnamese translations and usage examples.</p>
                         </div>
 
                         {/* Interactive Mastering statistics */}
                         <div className="flex items-center gap-2">
-                          <span className="text-[10px] bg-slate-900 text-slate-400 px-2 py-1 rounded border border-white/5">
+                          <span className="text-[10px] bg-[var(--nested-bg)] text-[var(--text-sub)] px-2 py-1 rounded border border-[var(--border-light)]">
                             Mastered: {Object.values(masteredWords).filter(Boolean).length} / {currentResult.vocabulary.length}
                           </span>
                         </div>
                       </div>
 
                       {currentResult.vocabulary.length === 0 ? (
-                        <div className="py-12 text-center bg-slate-900/40 rounded-xl border border-dashed border-white/5">
-                          <p className="text-xs text-slate-400">No key vocabulary was detected in this text sample.</p>
+                        <div className="py-12 text-center bg-[var(--nested-bg)] rounded-xl border border-dashed border-[var(--border-light)]">
+                          <p className="text-xs text-[var(--text-muted)]">No key vocabulary was detected in this text sample.</p>
                         </div>
                       ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1106,13 +1192,13 @@ ${currentResult.keyTakeaways.map(t => `- ${t}`).join("\n")}
                                 <div className={`w-full h-full duration-500 transform-style-3d relative ${isFlipped ? 'rotate-y-180' : ''}`}>
                                   
                                   {/* FRONT SIDE (English) */}
-                                  <div className="absolute inset-0 backface-hidden bg-gradient-to-br from-white/10 to-white/5 hover:from-white/15 border border-white/15 hover:border-indigo-500/40 rounded-2xl p-4 flex flex-col justify-between shadow-lg">
+                                  <div className="absolute inset-0 backface-hidden bg-slate-100 dark:bg-slate-900/60 hover:bg-slate-200 dark:hover:bg-slate-800/80 border border-[var(--card-border)] hover:border-indigo-500/40 rounded-2xl p-4 flex flex-col justify-between shadow-lg transition-all duration-300">
                                     <div className="flex justify-between items-start">
-                                      <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">FRONT (English)</span>
+                                      <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] tracking-wider">FRONT (English)</span>
                                       
                                       <button
                                         onClick={(e) => toggleMasteredWord(v.word, e)}
-                                        className={`p-1.5 rounded-lg border transition-all ${isMastered ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400' : 'bg-slate-800/60 border-white/5 text-slate-500 hover:text-slate-300'}`}
+                                        className={`p-1.5 rounded-lg border transition-all cursor-pointer ${isMastered ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-600 dark:text-emerald-400' : 'bg-[var(--nested-bg)] border-[var(--border-light)] text-[var(--text-muted)] hover:text-[var(--text-title)]'}`}
                                         title={isMastered ? "Mastered" : "Mark as Mastered"}
                                       >
                                         <Check className="w-3.5 h-3.5" />
@@ -1120,34 +1206,34 @@ ${currentResult.keyTakeaways.map(t => `- ${t}`).join("\n")}
                                     </div>
 
                                     <div className="text-center py-2">
-                                      <h3 className="text-lg font-black text-white group-hover:text-indigo-300 transition-colors">{v.word}</h3>
-                                      <p className="text-xs text-indigo-200 mt-1 font-mono">{v.ipa} • <span className="italic text-[10px] text-slate-400">{v.partOfSpeech}</span></p>
+                                      <h3 className="text-lg font-black text-[var(--text-title)] group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition-colors">{v.word}</h3>
+                                      <p className="text-xs text-indigo-600 dark:text-indigo-200 mt-1 font-mono">{v.ipa} • <span className="italic text-[10px] text-[var(--text-muted)]">{v.partOfSpeech}</span></p>
                                     </div>
 
-                                    <div className="flex justify-between items-center text-[10px] text-slate-500">
+                                    <div className="flex justify-between items-center text-[10px] text-[var(--text-muted)]">
                                       <span>Click to flip</span>
                                       <RefreshCw className="w-3 h-3 group-hover:animate-spin" style={{ animationDuration: "3s" }} />
                                     </div>
                                   </div>
 
                                   {/* BACK SIDE (Vietnamese & Definitions) */}
-                                  <div className="absolute inset-0 backface-hidden rotate-y-180 bg-indigo-950/70 border border-indigo-500/35 rounded-2xl p-4 flex flex-col justify-between shadow-lg">
+                                  <div className="absolute inset-0 backface-hidden rotate-y-180 bg-indigo-50/95 dark:bg-indigo-950/90 border border-indigo-500/35 rounded-2xl p-4 flex flex-col justify-between shadow-lg transition-all duration-300">
                                     <div className="flex justify-between items-start">
-                                      <span className="text-[10px] uppercase font-bold text-indigo-400 tracking-wider">BACK (Vietnamese)</span>
-                                      <span className="text-[10px] bg-indigo-500/25 text-indigo-200 px-1.5 py-0.5 rounded italic font-bold">{v.partOfSpeech}</span>
+                                      <span className="text-[10px] uppercase font-bold text-indigo-600 dark:text-indigo-400 tracking-wider">BACK (Vietnamese)</span>
+                                      <span className="text-[10px] bg-indigo-500/20 dark:bg-indigo-500/25 text-indigo-700 dark:text-indigo-200 px-1.5 py-0.5 rounded italic font-bold">{v.partOfSpeech}</span>
                                     </div>
 
                                     <div className="space-y-1.5 overflow-y-auto pr-1">
-                                      <p className="text-sm font-black text-white">{v.vietnamese}</p>
-                                      <p className="text-[11px] text-indigo-200 leading-normal line-clamp-2">Def: {v.definition}</p>
+                                      <p className="text-sm font-black text-indigo-950 dark:text-white">{v.vietnamese}</p>
+                                      <p className="text-[11px] text-indigo-900 dark:text-indigo-200 leading-normal line-clamp-2">Def: {v.definition}</p>
                                       
                                       <div className="border-t border-indigo-500/20 pt-1.5">
-                                        <p className="text-[10px] text-slate-300 italic leading-snug line-clamp-1">"{v.example}"</p>
-                                        <p className="text-[9px] text-indigo-400 leading-normal line-clamp-1">{v.exampleTranslation}</p>
+                                        <p className="text-[10px] text-slate-600 dark:text-slate-300 italic leading-snug line-clamp-1">"{v.example}"</p>
+                                        <p className="text-[9px] text-indigo-600 dark:text-indigo-400 leading-normal line-clamp-1">{v.exampleTranslation}</p>
                                       </div>
                                     </div>
 
-                                    <div className="flex justify-between items-center text-[10px] text-indigo-400/80">
+                                    <div className="flex justify-between items-center text-[10px] text-indigo-600/80 dark:text-indigo-400/80">
                                       <span>Click to flip front</span>
                                       <RefreshCw className="w-3 h-3" />
                                     </div>
@@ -1169,38 +1255,38 @@ ${currentResult.keyTakeaways.map(t => `- ${t}`).join("\n")}
                       animate={{ opacity: 1, y: 0 }}
                       className="space-y-5"
                     >
-                      <div className="flex items-center justify-between border-b border-white/5 pb-2">
-                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                      <div className="flex items-center justify-between border-b border-[var(--border-light)] pb-2">
+                        <h4 className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-widest">
                           External Integration Suite
                         </h4>
-                        <span className="text-[10px] text-indigo-400 font-mono">No API Tokens required</span>
+                        <span className="text-[10px] text-indigo-500 dark:text-indigo-400 font-mono">No API Tokens required</span>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         
                         {/* Notion Integration Option */}
-                        <div className="p-4 bg-white/5 rounded-2xl border border-white/10 flex flex-col justify-between gap-4">
+                        <div className="p-4 bg-[var(--nested-bg)] rounded-2xl border border-[var(--nested-border)] flex flex-col justify-between gap-4 transition-all duration-300">
                           <div className="flex items-start gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-slate-900 border border-white/10 flex items-center justify-center shrink-0">
-                              <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+                            <div className="w-10 h-10 rounded-xl bg-slate-200 dark:bg-slate-900 border border-[var(--nested-border)] flex items-center justify-center shrink-0">
+                              <svg className="w-5 h-5 text-slate-800 dark:text-white" fill="currentColor" viewBox="0 0 24 24">
                                 <path d="M4.445 1h15.111c1.902 0 3.444 1.543 3.444 3.444v15.112c0 1.902-1.542 3.444-3.444 3.444H4.445A3.444 3.444 0 0 1 1 19.556V4.444C1 2.543 2.542 1 4.445 1zm1.334 1.333a2.11 2.11 0 0 0-2.112 2.111v15.112c0 1.165.947 2.111 2.112 2.111h15.11a2.11 2.11 0 0 0 2.112-2.111V4.444a2.11 2.11 0 0 0-2.112-2.111H5.779z" />
                               </svg>
                             </div>
                             <div>
-                              <h5 className="text-sm font-bold text-white">Sync to Notion Workspace</h5>
-                              <p className="text-[11px] text-slate-400 leading-normal mt-0.5">Export structured listening transcripts, exam predictions, and core vocabulary blocks straight into your personal study workspace.</p>
+                              <h5 className="text-sm font-bold text-[var(--text-title)]">Sync to Notion Workspace</h5>
+                              <p className="text-[11px] text-[var(--text-muted)] leading-normal mt-0.5">Export structured listening transcripts, exam predictions, and core vocabulary blocks straight into your personal study workspace.</p>
                             </div>
                           </div>
 
-                          <div className="bg-slate-950/40 p-2.5 rounded-xl border border-white/5 text-[10px] text-slate-500 font-mono">
-                            <div className="flex justify-between mb-1"><span>Target Connection:</span><span className="text-indigo-400">Notion Integration App</span></div>
+                          <div className="bg-[var(--nested-light-bg)] p-2.5 rounded-xl border border-[var(--nested-light-border)] text-[10px] text-[var(--text-muted)] font-mono">
+                            <div className="flex justify-between mb-1"><span>Target Connection:</span><span className="text-indigo-600 dark:text-indigo-400">Notion Integration App</span></div>
                             <div className="flex justify-between"><span>Synced Docs:</span><span>{syncedNotionCount} logs uploaded</span></div>
                           </div>
 
                           <div className="flex items-center gap-2">
                             <button
                               onClick={copyNotionMarkdown}
-                              className="flex-1 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 hover:text-white rounded-xl text-xs font-bold border border-indigo-500/30 transition-colors flex items-center justify-center gap-1.5"
+                              className="flex-1 py-2 bg-indigo-500/10 dark:bg-indigo-600/20 hover:bg-indigo-500/20 dark:hover:bg-indigo-600/30 text-indigo-600 dark:text-indigo-300 hover:text-indigo-700 dark:hover:text-white rounded-xl text-xs font-bold border border-indigo-500/30 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                             >
                               <Copy className="w-3.5 h-3.5" />
                               Copy Markdown
@@ -1208,7 +1294,7 @@ ${currentResult.keyTakeaways.map(t => `- ${t}`).join("\n")}
                             <button
                               onClick={handleSyncNotion}
                               disabled={isSyncingNotion}
-                              className="flex-1 py-2 bg-white text-slate-900 hover:bg-slate-100 rounded-xl text-xs font-black transition-colors flex items-center justify-center gap-1.5 shadow-lg shadow-white/5"
+                              className="flex-1 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 rounded-xl text-xs font-black transition-colors flex items-center justify-center gap-1.5 shadow-lg shadow-black/5 dark:shadow-white/5 cursor-pointer"
                             >
                               {isSyncingNotion ? (
                                 <>
@@ -1226,26 +1312,26 @@ ${currentResult.keyTakeaways.map(t => `- ${t}`).join("\n")}
                         </div>
 
                         {/* Anki Flashcards Integration Option */}
-                        <div className="p-4 bg-white/5 rounded-2xl border border-white/10 flex flex-col justify-between gap-4">
+                        <div className="p-4 bg-[var(--nested-bg)] rounded-2xl border border-[var(--nested-border)] flex flex-col justify-between gap-4 transition-all duration-300">
                           <div className="flex items-start gap-3">
                             <div className="w-10 h-10 rounded-xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center shrink-0">
-                              <BookOpen className="w-5 h-5 text-blue-400" />
+                              <BookOpen className="w-5 h-5 text-blue-500 dark:text-blue-400" />
                             </div>
                             <div>
-                              <h5 className="text-sm font-bold text-white">Anki Desktop / Mobile Deck</h5>
-                              <p className="text-[11px] text-slate-400 leading-normal mt-0.5">Push generated English/Vietnamese academic words to Anki Decks with IPA, grammar, definitions, and contextual examples automatically.</p>
+                              <h5 className="text-sm font-bold text-[var(--text-title)]">Anki Desktop / Mobile Deck</h5>
+                              <p className="text-[11px] text-[var(--text-muted)] leading-normal mt-0.5">Push generated English/Vietnamese academic words to Anki Decks with IPA, grammar, definitions, and contextual examples automatically.</p>
                             </div>
                           </div>
 
-                          <div className="bg-slate-950/40 p-2.5 rounded-xl border border-white/5 text-[10px] text-slate-500 font-mono">
-                            <div className="flex justify-between mb-1"><span>Target Deck:</span><span className="text-indigo-400">{selectedDeck}</span></div>
+                          <div className="bg-[var(--nested-light-bg)] p-2.5 rounded-xl border border-[var(--nested-light-border)] text-[10px] text-[var(--text-muted)] font-mono">
+                            <div className="flex justify-between mb-1"><span>Target Deck:</span><span className="text-indigo-600 dark:text-indigo-400">{selectedDeck}</span></div>
                             <div className="flex justify-between"><span>Cards synced:</span><span>{syncedDecksCount} terms</span></div>
                           </div>
 
                           <div className="flex items-center gap-2">
                             <button
                               onClick={downloadAnkiCsv}
-                              className="flex-1 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 hover:text-white rounded-xl text-xs font-bold border border-indigo-500/30 transition-colors flex items-center justify-center gap-1.5"
+                              className="flex-1 py-2 bg-indigo-500/10 dark:bg-indigo-600/20 hover:bg-indigo-500/20 dark:hover:bg-indigo-600/30 text-indigo-600 dark:text-indigo-300 hover:text-indigo-700 dark:hover:text-white rounded-xl text-xs font-bold border border-indigo-500/30 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                             >
                               <FileDown className="w-3.5 h-3.5" />
                               Download CSV
@@ -1253,7 +1339,7 @@ ${currentResult.keyTakeaways.map(t => `- ${t}`).join("\n")}
                             <button
                               onClick={handleSyncAnki}
                               disabled={isSyncingAnki}
-                              className="flex-1 py-2 bg-white text-slate-900 hover:bg-slate-100 rounded-xl text-xs font-black transition-colors flex items-center justify-center gap-1.5 shadow-lg shadow-white/5"
+                              className="flex-1 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 rounded-xl text-xs font-black transition-colors flex items-center justify-center gap-1.5 shadow-lg shadow-black/5 dark:shadow-white/5 cursor-pointer"
                             >
                               {isSyncingAnki ? (
                                 <>
@@ -1321,93 +1407,127 @@ ${currentResult.keyTakeaways.map(t => `- ${t}`).join("\n")}
                 </div>
 
                 {/* Primary Recording & Audio upload block */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  
-                  {/* Option A: Microphone Audio Capture */}
-                  <div className="p-4 rounded-2xl bg-slate-950/35 border border-white/5 flex flex-col justify-between gap-4">
-                    <div>
-                      <span className="text-[9px] uppercase font-bold tracking-widest text-indigo-400">Method A</span>
-                      <h3 className="text-sm font-bold text-white mt-1">Live AI Audio Capture</h3>
-                      <p className="text-[11px] text-slate-400 leading-normal mt-0.5">Capture real-time voice, lectures, or speaker playbacks through your microphone.</p>
-                    </div>
+                {audioUrl ? (
+                  <div className="p-6 rounded-2xl bg-gradient-to-br from-indigo-950/40 to-slate-950/65 border border-indigo-500/20 flex flex-col gap-4 shadow-2xl relative overflow-hidden">
+                    {/* Background glows */}
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+                    <div className="absolute bottom-0 left-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none" />
+                    
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-4 z-10">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0 shadow-inner">
+                          <FileAudio className="w-6 h-6 animate-pulse" />
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-[10px] uppercase font-black tracking-widest text-indigo-400">Captured Audio Asset</span>
+                          <h3 className="text-sm font-bold text-white mt-0.5 truncate">{audioFileName}</h3>
+                          <p className="text-[11px] text-slate-400 mt-0.5">File is ready for instant download and AI transcription analysis</p>
+                        </div>
+                      </div>
 
-                    {/* Microphone Action Buttons */}
-                    <div className="flex flex-col gap-2">
-                      {isRecording ? (
+                      <div className="flex items-center gap-2 self-end sm:self-center z-10">
                         <button
-                          onClick={stopRecording}
-                          className="w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 animate-pulse shadow-lg shadow-red-600/20"
+                          onClick={downloadAudioFile}
+                          className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl transition-all shadow-lg shadow-indigo-600/30 flex items-center gap-1.5 border border-indigo-400/20 cursor-pointer active:scale-95"
+                          title="Tải xuống tập tin âm thanh đã ghi (Download Captured Audio)"
                         >
-                          <Square className="w-3.5 h-3.5 fill-current" />
-                          Stop Recording ({formatTime(recordingDuration)})
+                          <FileDown className="w-4 h-4" />
+                          <span>Tải file ghi âm</span>
                         </button>
-                      ) : (
+                        
                         <button
-                          onClick={startRecording}
-                          className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30 border border-white/10"
+                          onClick={() => {
+                            setAudioUrl(null);
+                            setAudioBlob(null);
+                            setAudioFileName("");
+                            setPipelineStep(1);
+                          }}
+                          className="p-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 rounded-xl transition-all border border-red-500/20 cursor-pointer"
+                          title="Xóa âm thanh này để bắt đầu lại (Discard and restart)"
                         >
-                          <Mic className="w-3.5 h-3.5" />
-                          Start Recording
+                          <Trash2 className="w-4 h-4" />
                         </button>
-                      )}
-
-                      {/* Micro sound simulation visual canvas */}
-                      <div className="h-11 bg-slate-900 rounded-xl border border-white/5 overflow-hidden flex items-center justify-center relative">
-                        <canvas ref={canvasRef} width={280} height={44} className="w-full h-full" />
-                        {!isRecording && (
-                          <span className="text-[9px] text-slate-500 font-mono absolute">Microphone idle</span>
-                        )}
                       </div>
                     </div>
-                  </div>
 
-                  {/* Option B: Audio File Upload */}
-                  <div className="p-4 rounded-2xl bg-slate-950/35 border border-white/5 flex flex-col justify-between gap-4">
-                    <div>
-                      <span className="text-[9px] uppercase font-bold tracking-widest text-indigo-400">Method B</span>
-                      <h3 className="text-sm font-bold text-white mt-1">File Audio Importer</h3>
-                      <p className="text-[11px] text-slate-400 leading-normal mt-0.5">Drag-and-drop or select any MP3, WAV, or AAC audio recordings for complete Whisper extraction.</p>
+                    {/* Audio Preview component with waveform visual placeholder */}
+                    <div className="bg-slate-900/80 p-3.5 rounded-xl border border-white/5 flex flex-col gap-2 z-10">
+                      <div className="flex items-center justify-between text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                        <span>Trình phát âm thanh (Audio Preview Player)</span>
+                        <span className="text-indigo-400/80 font-mono">Format: WAV / AAC / MP3</span>
+                      </div>
+                      <audio src={audioUrl} controls className="w-full h-9 rounded-lg" />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    
+                    {/* Option A: Microphone Audio Capture */}
+                    <div className="p-4 rounded-2xl bg-slate-950/35 border border-white/5 flex flex-col justify-between gap-4">
+                      <div>
+                        <span className="text-[9px] uppercase font-bold tracking-widest text-indigo-400">Method A</span>
+                        <h3 className="text-sm font-bold text-white mt-1">Live AI Audio Capture</h3>
+                        <p className="text-[11px] text-slate-400 leading-normal mt-0.5">Capture real-time voice, lectures, or speaker playbacks through your microphone.</p>
+                      </div>
+
+                      {/* Microphone Action Buttons */}
+                      <div className="flex flex-col gap-2">
+                        {isRecording ? (
+                          <button
+                            onClick={stopRecording}
+                            className="w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 animate-pulse shadow-lg shadow-red-600/20"
+                          >
+                            <Square className="w-3.5 h-3.5 fill-current" />
+                            Stop Recording ({formatTime(recordingDuration)})
+                          </button>
+                        ) : (
+                          <button
+                            onClick={startRecording}
+                            className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30 border border-white/10"
+                          >
+                            <Mic className="w-3.5 h-3.5" />
+                            Start Recording
+                          </button>
+                        )}
+
+                        {/* Micro sound simulation visual canvas */}
+                        <div className="h-11 bg-slate-900 rounded-xl border border-white/5 overflow-hidden flex items-center justify-center relative">
+                          <canvas ref={canvasRef} width={280} height={44} className="w-full h-full" />
+                          {!isRecording && (
+                            <span className="text-[9px] text-slate-500 font-mono absolute">Microphone idle</span>
+                          )}
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="flex flex-col gap-2">
-                      <label className="w-full py-3 bg-white/10 hover:bg-white/15 text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all border border-white/10 flex items-center justify-center gap-2 cursor-pointer">
-                        <Upload className="w-3.5 h-3.5" />
-                        Upload Audio File
-                        <input
-                          type="file"
-                          accept="audio/*"
-                          className="hidden"
-                          onChange={handleAudioFileUpload}
-                        />
-                      </label>
+                    {/* Option B: Audio File Upload */}
+                    <div className="p-4 rounded-2xl bg-slate-950/35 border border-white/5 flex flex-col justify-between gap-4">
+                      <div>
+                        <span className="text-[9px] uppercase font-bold tracking-widest text-indigo-400">Method B</span>
+                        <h3 className="text-sm font-bold text-white mt-1">File Audio Importer</h3>
+                        <p className="text-[11px] text-slate-400 leading-normal mt-0.5">Drag-and-drop or select any MP3, WAV, or AAC audio recordings for complete Whisper extraction.</p>
+                      </div>
 
-                      {audioUrl ? (
-                        <div className="p-2.5 bg-slate-900 rounded-xl border border-white/5 flex items-center justify-between text-xs font-mono">
-                          <div className="flex items-center gap-2 text-slate-300 min-w-0">
-                            <FileAudio className="w-4 h-4 text-indigo-400 shrink-0" />
-                            <span className="truncate pr-1">{audioFileName}</span>
-                          </div>
-                          <button 
-                            onClick={() => {
-                              setAudioUrl(null);
-                              setAudioBlob(null);
-                              setAudioFileName("");
-                              setPipelineStep(1);
-                            }}
-                            className="text-slate-500 hover:text-red-400 transition-colors"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ) : (
+                      <div className="flex flex-col gap-2">
+                        <label className="w-full py-3 bg-white/10 hover:bg-white/15 text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all border border-white/10 flex items-center justify-center gap-2 cursor-pointer">
+                          <Upload className="w-3.5 h-3.5" />
+                          Upload Audio File
+                          <input
+                            type="file"
+                            accept="audio/*"
+                            className="hidden"
+                            onChange={handleAudioFileUpload}
+                          />
+                        </label>
+
                         <div className="p-2.5 bg-slate-900 rounded-xl border border-white/5 flex items-center justify-center text-[10px] text-slate-500 font-mono h-11 text-center">
                           No audio file imported
                         </div>
-                      )}
+                      </div>
                     </div>
-                  </div>
 
-                </div>
+                  </div>
+                )}
 
                 {/* Question targeting (Optional area to paste exams) */}
                 <div className="space-y-2">

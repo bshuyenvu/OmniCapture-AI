@@ -29,30 +29,17 @@ const ai = apiKey
 // Endpoint 1: Analyze audio (base64 data)
 app.post("/api/analyze-audio", async (req, res) => {
   try {
-    if (!ai) {
-      return res.status(500).json({
-        error: "GEMINI_API_KEY is missing. Please add it in Settings > Secrets in the AI Studio UI.",
-      });
-    }
-
     const { audioData, mimeType, questions } = req.body;
 
     if (!audioData || !mimeType) {
       return res.status(400).json({ error: "Missing audioData or mimeType" });
     }
 
-    const audioPart = {
-      inlineData: {
-        mimeType: mimeType,
-        data: audioData,
-      },
-    };
-
     const promptText = `
       You are an expert AI Listening Assistant for English learners. Your task is to transcribe this audio file and perform a complete pedagogical analysis.
       
       Here are the specific requirements:
-      1. TRANSCRIPTION: Transcribe the audio perfectly in English. Do not omit words.
+      1. TRANSCRIPTION (CRITICAL - MAXIMUM PRIORITY): Transcribe the ENTIRE audio perfectly and completely in English from the very first word to the absolute last word. You MUST write down the complete verbatim content. DO NOT summarize, DO NOT truncate, DO NOT omit any sentences, and DO NOT use placeholders like "[...]". Every spoken sentence and phrase must be captured and fully written down to form the complete, unabridged transcript.
       2. SUMMARY: Provide a concise Vietnamese summary of the listening content (about 2-3 sentences).
       3. QUESTIONS & PREDICTIONS: 
          - Analyze any user-provided questions (listed below).
@@ -68,6 +55,71 @@ app.post("/api/analyze-audio", async (req, res) => {
       ${questions ? questions : "(None provided. Please auto-generate 3 relevant comprehension questions based on the audio content.)"}
     `;
 
+    // 1. If OpenRouter API key is configured, use OpenRouter API
+    const openrouterApiKey = process.env.OPENROUTER_API_KEY;
+    const openrouterModel = process.env.OPENROUTER_MODEL || "google/gemini-2.5-flash";
+
+    if (openrouterApiKey) {
+      console.log(`Analyzing audio using OpenRouter API with model: ${openrouterModel}`);
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${openrouterApiKey}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "https://ai.studio/build",
+          "X-Title": "AI Listening Assistant",
+        },
+        body: JSON.stringify({
+          model: openrouterModel,
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: promptText,
+                },
+                {
+                  type: "image_url",
+                  image_url: {
+                    url: `data:${mimeType};base64,${audioData}`,
+                  },
+                },
+              ],
+            },
+          ],
+          response_format: { type: "json_object" },
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`OpenRouter Error: ${response.status} - ${errorText}`);
+      }
+
+      const resJson = await response.json();
+      const content = resJson.choices?.[0]?.message?.content;
+      if (!content) {
+        throw new Error("Empty response from OpenRouter");
+      }
+      const parsedData = JSON.parse(content);
+      return res.json(parsedData);
+    }
+
+    // 2. Direct Gemini API client fallback
+    if (!ai) {
+      return res.status(500).json({
+        error: "Neither OPENROUTER_API_KEY nor GEMINI_API_KEY is configured. Please add one in Settings > Secrets.",
+      });
+    }
+
+    const audioPart = {
+      inlineData: {
+        mimeType: mimeType,
+        data: audioData,
+      },
+    };
+
     const textPart = { text: promptText };
 
     const response = await ai.models.generateContent({
@@ -80,7 +132,7 @@ app.post("/api/analyze-audio", async (req, res) => {
           properties: {
             transcript: {
               type: Type.STRING,
-              description: "The full English transcript of the audio.",
+              description: "The absolute full, complete, and unabridged verbatim English transcript of the entire audio. Do not summarize, truncate, shorten or omit anything.",
             },
             summary: {
               type: Type.STRING,
@@ -155,12 +207,6 @@ app.post("/api/analyze-audio", async (req, res) => {
 // Endpoint 2: Analyze transcript text directly (useful if user pastes transcript + questions)
 app.post("/api/analyze-transcript", async (req, res) => {
   try {
-    if (!ai) {
-      return res.status(500).json({
-        error: "GEMINI_API_KEY is missing. Please add it in Settings > Secrets in the AI Studio UI.",
-      });
-    }
-
     const { transcript, questions } = req.body;
 
     if (!transcript) {
@@ -172,7 +218,7 @@ app.post("/api/analyze-transcript", async (req, res) => {
       You are given a transcript of a listening lesson or video and optionally a list of questions.
       
       Here are the specific requirements:
-      1. FORMAT TRANSCRIPT: Correct any typos in the transcript text and output it formatted beautifully with paragraphs.
+      1. FORMAT TRANSCRIPT (CRITICAL - MAXIMUM PRIORITY): You must output the ENTIRE, complete text of the transcript. Correct any typos but DO NOT shorten, DO NOT truncate, and DO NOT summarize any part of the transcript. Keep the full content from start to finish formatted beautifully with paragraphs.
       2. SUMMARY: Provide a concise Vietnamese summary of the listening content (about 2-3 sentences).
       3. QUESTIONS & PREDICTIONS: 
          - Analyze any user-provided questions (listed below).
@@ -191,6 +237,58 @@ app.post("/api/analyze-transcript", async (req, res) => {
       ${questions ? questions : "(None provided. Please auto-generate 3 relevant comprehension questions based on the transcript.)"}
     `;
 
+    // 1. If OpenRouter API key is configured, use OpenRouter API
+    const openrouterApiKey = process.env.OPENROUTER_API_KEY;
+    const openrouterModel = process.env.OPENROUTER_MODEL || "google/gemini-2.5-flash";
+
+    if (openrouterApiKey) {
+      console.log(`Analyzing transcript using OpenRouter API with model: ${openrouterModel}`);
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${openrouterApiKey}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "https://ai.studio/build",
+          "X-Title": "AI Listening Assistant",
+        },
+        body: JSON.stringify({
+          model: openrouterModel,
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: promptText,
+                },
+              ],
+            },
+          ],
+          response_format: { type: "json_object" },
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`OpenRouter Error: ${response.status} - ${errorText}`);
+      }
+
+      const resJson = await response.json();
+      const content = resJson.choices?.[0]?.message?.content;
+      if (!content) {
+        throw new Error("Empty response from OpenRouter");
+      }
+      const parsedData = JSON.parse(content);
+      return res.json(parsedData);
+    }
+
+    // 2. Direct Gemini API client fallback
+    if (!ai) {
+      return res.status(500).json({
+        error: "Neither OPENROUTER_API_KEY nor GEMINI_API_KEY is configured. Please add one in Settings > Secrets.",
+      });
+    }
+
     const response = await ai.models.generateContent({
       model: "gemini-3.5-flash",
       contents: promptText,
@@ -201,7 +299,7 @@ app.post("/api/analyze-transcript", async (req, res) => {
           properties: {
             transcript: {
               type: Type.STRING,
-              description: "The formatted English transcript.",
+              description: "The absolute full, complete, and unabridged formatted English transcript from start to finish. Do not truncate, edit down, shorten or omit anything.",
             },
             summary: {
               type: Type.STRING,
