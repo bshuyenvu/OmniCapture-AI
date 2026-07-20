@@ -371,6 +371,112 @@ app.post("/api/analyze-transcript", async (req, res) => {
   }
 });
 
+// Endpoint 3: OpenRouter AI Chat integration
+app.post("/api/openrouter-chat", async (req, res) => {
+  try {
+    const { message } = req.body;
+
+    // 8. Kiểm tra message không được để trống.
+    if (!message || typeof message !== "string" || message.trim() === "") {
+      return res.status(400).json({ error: "Câu hỏi (message) không được để trống." });
+    }
+
+    // 2. Đọc API key từ secret phía server.
+    const openrouterApiKey = process.env.OPENROUTER_API_KEY;
+
+    // 10. Xử lý thiếu OPENROUTER_API_KEY
+    if (!openrouterApiKey) {
+      return res.status(500).json({ 
+        error: "Cấu hình thiếu OPENROUTER_API_KEY phía máy chủ. Vui lòng thiết lập API Key trong phần cài đặt." 
+      });
+    }
+
+    // 5 & 6 & 7. Gửi yêu cầu đến OpenRouter
+    let response;
+    try {
+      response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${openrouterApiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          "model": "google/gemma-4-26b-a4b-it:free",
+          "messages": [
+            {
+              "role": "system",
+              "content": "Bạn là trợ lý AI hữu ích, trả lời rõ ràng bằng tiếng Việt."
+            },
+            {
+              "role": "user",
+              "content": message
+            }
+          ],
+          "max_tokens": 1000
+        })
+      });
+    } catch (networkError: any) {
+      // 10. Xử lý lỗi kết nối mạng
+      console.error("OpenRouter network connection error:", networkError);
+      return res.status(503).json({ 
+        error: "Không thể kết nối đến máy chủ OpenRouter. Vui lòng kiểm tra kết nối mạng của máy chủ." 
+      });
+    }
+
+    // 10. Xử lý các lỗi HTTP status
+    if (!response.ok) {
+      const status = response.status;
+      let errorText = "";
+      try {
+        errorText = await response.text();
+      } catch (e) {}
+
+      console.error(`OpenRouter error response (status ${status}):`, errorText);
+
+      if (status === 401) {
+        // Lỗi xác thực 401
+        return res.status(401).json({ 
+          error: "Lỗi xác thực với OpenRouter (Mã lỗi 401). Vui lòng kiểm tra lại tính chính xác của OPENROUTER_API_KEY." 
+        });
+      } else if (status === 402 || status === 429) {
+        // Hết hạn mức 402 hoặc 429
+        return res.status(status).json({ 
+          error: "Lỗi giới hạn lượt truy cập hoặc tài khoản hết số dư / hết hạn mức từ OpenRouter (Mã lỗi 402/429). Vui lòng thử lại sau." 
+        });
+      } else {
+        return res.status(status).json({ 
+          error: `OpenRouter trả về lỗi hệ thống (Mã lỗi ${status}): ${errorText || response.statusText}` 
+        });
+      }
+    }
+
+    const data: any = await response.json();
+
+    // 10. Xử lý OpenRouter không trả content
+    if (!data || !data.choices || data.choices.length === 0 || !data.choices[0].message || !data.choices[0].message.content) {
+      console.error("OpenRouter invalid response body structure:", data);
+      return res.status(502).json({ 
+        error: "OpenRouter không trả về nội dung phản hồi hợp lệ (Missing choice content)." 
+      });
+    }
+
+    const reply = data.choices[0].message.content;
+    const model = data.model || "google/gemma-4-26b-a4b-it:free";
+
+    // 9. Trả về cho client
+    return res.json({
+      reply,
+      model
+    });
+
+  } catch (error: any) {
+    console.error("General error in /api/openrouter-chat:", error);
+    return res.status(500).json({ 
+      error: error.message || "Đã xảy ra lỗi không xác định khi xử lý yêu cầu chat." 
+    });
+  }
+});
+
 // Configure Vite or serve static files in production
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {

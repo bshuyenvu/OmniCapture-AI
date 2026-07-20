@@ -27,10 +27,13 @@ import {
   BookMarked,
   ArrowRightLeft,
   Sun,
-  Moon
+  Moon,
+  MessageSquare,
+  Send,
+  AlertCircle
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { AnalysisResult, SavedSession, Vocabulary, Prediction } from "./types";
+import { AnalysisResult, SavedSession, Vocabulary, Prediction, ChatMessage } from "./types";
 
 // Pre-defined high-quality sample listening templates for quick evaluation
 const SAMPLE_TEMPLATES = [
@@ -224,8 +227,21 @@ export default function App() {
     }
   }, [theme]);
 
-  const [activeTab, setActiveTab] = useState<"capture" | "transcript" | "predictions" | "vocabulary" | "notion-anki">("capture");
+  const [activeTab, setActiveTab] = useState<"capture" | "transcript" | "predictions" | "vocabulary" | "notion-anki" | "ai-chat">("capture");
   const [pipelineStep, setPipelineStep] = useState<number>(1); // 1: Capture, 2: Whisper, 3: Analysis, 4: Flashcards
+  
+  // OpenRouter Chat states
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
+    {
+      id: "init-message",
+      role: "assistant",
+      content: "Xin chào! Tôi là Trợ lý Học tập Tiếng Anh thông thái. Bạn có câu hỏi nào cần giải đáp về bài nghe, từ vựng hay các bí quyết phát âm hôm nay không?",
+      timestamp: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })
+    }
+  ]);
+  const [chatInput, setChatInput] = useState<string>("");
+  const [isSendingChat, setIsSendingChat] = useState<boolean>(false);
+  const [chatError, setChatError] = useState<string | null>(null);
   
   // Audio Recording States
   const [isRecording, setIsRecording] = useState<boolean>(false);
@@ -261,6 +277,15 @@ export default function App() {
   const audioChunksRef = useRef<Blob[]>([]);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  
+  // Chat Scrolling ref & effect
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [chatMessages]);
 
   // Load history from LocalStorage
   useEffect(() => {
@@ -634,6 +659,63 @@ export default function App() {
       [word]: !prev[word]
     }));
     triggerFeedback(`Vocabulary '${word}' marked as ${!masteredWords[word] ? 'Mastered' : 'Needs practice'}`);
+  };
+
+  // Send message to OpenRouter server API
+  const handleSendChatMessage = async () => {
+    if (!chatInput.trim()) return;
+
+    const userMsgText = chatInput.trim();
+    setChatInput("");
+    setChatError(null);
+    setIsSendingChat(true);
+
+    const userMsg: ChatMessage = {
+      id: `chat_user_${Date.now()}`,
+      role: "user",
+      content: userMsgText,
+      timestamp: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })
+    };
+
+    setChatMessages((prev) => [...prev, userMsg]);
+
+    try {
+      const res = await fetch("/api/openrouter-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: userMsgText }),
+      });
+
+      if (!res.ok) {
+        let errMsg = `Lỗi hệ thống (${res.status})`;
+        try {
+          const errData = await res.json();
+          errMsg = errData.error || errMsg;
+        } catch (e) {
+          try {
+            const rawText = await res.text();
+            if (rawText) errMsg = rawText.substring(0, 150);
+          } catch (e2) {}
+        }
+        throw new Error(errMsg);
+      }
+
+      const data = await res.json();
+      const assistantMsg: ChatMessage = {
+        id: `chat_assistant_${Date.now()}`,
+        role: "assistant",
+        content: data.reply,
+        model: data.model,
+        timestamp: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })
+      };
+
+      setChatMessages((prev) => [...prev, assistantMsg]);
+    } catch (err: any) {
+      console.error("Chat error:", err);
+      setChatError(err.message || "Đã xảy ra lỗi khi gửi yêu cầu.");
+    } finally {
+      setIsSendingChat(false);
+    }
   };
 
   // Feedback notifications
@@ -1022,6 +1104,13 @@ ${currentResult.keyTakeaways.map(t => `- ${t}`).join("\n")}
                     <ArrowRightLeft className="w-3.5 h-3.5" />
                     Sync & Export
                   </button>
+                  <button
+                    onClick={() => setActiveTab("ai-chat")}
+                    className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${activeTab === "ai-chat" ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/25" : "text-[var(--text-muted)] hover:text-[var(--text-title)] hover:bg-[var(--btn-sec-bg)]"}`}
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    AI Assistant (Hỏi đáp)
+                  </button>
                 </div>
 
                 {/* Tab content displays */}
@@ -1387,6 +1476,175 @@ ${currentResult.keyTakeaways.map(t => `- ${t}`).join("\n")}
                           </button>
                         </div>
                       </div>
+                    </motion.div>
+                  )}
+
+                  {/* Tab 5: AI CHAT ASSISTANT */}
+                  {activeTab === "ai-chat" && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="flex flex-col h-[550px]"
+                    >
+                      {/* Header info */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-[var(--border-light)] mb-4 gap-2 shrink-0">
+                        <div>
+                          <h4 className="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest flex items-center gap-1.5">
+                            <Sparkles className="w-3.5 h-3.5" />
+                            Gemma AI Assistant (Hỏi đáp)
+                          </h4>
+                          <p className="text-[10px] text-[var(--text-muted)] mt-0.5">
+                            Đặt câu hỏi về bài học, ngữ pháp, dịch nghĩa hay luyện phát âm dựa trên nội dung nghe hiện tại.
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-medium bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 border border-indigo-500/20">
+                            Model: google/gemma-4-26b-a4b-it:free
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Chat Messages List */}
+                      <div className="flex-grow overflow-y-auto space-y-4 pr-1 mb-4 min-h-0 bg-slate-950/10 dark:bg-slate-950/35 p-3 rounded-xl border border-[var(--card-border)]">
+                        {chatMessages.map((msg) => (
+                          <div
+                            key={msg.id}
+                            className={`flex gap-3 max-w-[85%] ${msg.role === "user" ? "ml-auto flex-row-reverse" : "mr-auto"}`}
+                          >
+                            {/* Avatar / Icon */}
+                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-sm border ${
+                              msg.role === "user" 
+                                ? "bg-indigo-600 border-indigo-500 text-white font-bold text-xs" 
+                                : "bg-[var(--nested-bg)] border-[var(--card-border)] text-indigo-600 dark:text-indigo-400"
+                            }`}>
+                              {msg.role === "user" ? "U" : <Sparkles className="w-3.5 h-3.5" />}
+                            </div>
+
+                            {/* Message Bubble */}
+                            <div className="flex flex-col">
+                              <div className={`p-3 rounded-2xl text-xs leading-relaxed font-normal shadow-sm border ${
+                                msg.role === "user"
+                                  ? "bg-indigo-600 border-indigo-500 text-white rounded-tr-none"
+                                  : "bg-[var(--nested-bg)] border-[var(--card-border)] text-[var(--text-app)] rounded-tl-none whitespace-pre-line"
+                              }`}>
+                                {msg.content}
+                              </div>
+
+                              {/* Footer details (Timestamp / Model Badge) */}
+                              <div className={`flex items-center gap-1.5 mt-1 text-[9px] text-[var(--text-muted)] ${
+                                msg.role === "user" ? "justify-end" : "justify-start"
+                              }`}>
+                                <span>{msg.timestamp}</span>
+                                {msg.model && (
+                                  <>
+                                    <span>•</span>
+                                    <span className="italic font-medium">{msg.model}</span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+
+                        {/* Sending / Processing indicator */}
+                        {isSendingChat && (
+                          <div className="flex gap-3 max-w-[85%] mr-auto">
+                            <div className="w-8 h-8 rounded-xl bg-[var(--nested-bg)] border border-[var(--card-border)] text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 animate-pulse">
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            </div>
+                            <div className="flex flex-col">
+                              <div className="p-3 bg-[var(--nested-bg)] border border-[var(--card-border)] text-[var(--text-app)] rounded-2xl rounded-tl-none text-xs flex items-center gap-2">
+                                <span className="flex gap-1">
+                                  <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                                  <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                                  <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                                </span>
+                                <span className="italic text-[var(--text-muted)]">Gemma đang suy nghĩ...</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        <div ref={chatEndRef} />
+                      </div>
+
+                      {/* Error Alert Panel */}
+                      {chatError && (
+                        <div className="p-3 mb-3 bg-rose-500/10 rounded-xl border border-rose-500/20 flex items-start gap-2 shrink-0">
+                          <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                          <div className="flex-grow">
+                            <p className="text-xs font-bold text-rose-700 dark:text-rose-400">Đã xảy ra lỗi khi kết nối AI</p>
+                            <p className="text-[10px] text-rose-600 dark:text-rose-300 mt-0.5">{chatError}</p>
+                          </div>
+                          <button 
+                            type="button"
+                            onClick={() => setChatError(null)}
+                            className="text-[10px] text-rose-600 dark:text-rose-400 hover:underline font-bold"
+                          >
+                            Đóng
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Quick Prompt Suggestion chips */}
+                      <div className="flex flex-wrap gap-1.5 mb-3 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setChatInput(`Dịch đầy đủ đoạn văn bản nghe này sang tiếng Việt, giữ nguyên cấu trúc hội thoại:\n\n${currentResult ? currentResult.transcript : ""}`)}
+                          disabled={isSendingChat}
+                          className="px-2.5 py-1 bg-[var(--nested-bg)] hover:bg-indigo-500/10 border border-[var(--card-border)] hover:border-indigo-500/30 rounded-lg text-[10px] text-[var(--text-muted)] hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors font-medium cursor-pointer"
+                        >
+                          Dịch đầy đủ văn bản nghe
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setChatInput(`Phân tích các cấu trúc ngữ pháp hay và thông dụng trong bài nghe này:\n\n${currentResult ? currentResult.transcript : ""}`)}
+                          disabled={isSendingChat}
+                          className="px-2.5 py-1 bg-[var(--nested-bg)] hover:bg-indigo-500/10 border border-[var(--card-border)] hover:border-indigo-500/30 rounded-lg text-[10px] text-[var(--text-muted)] hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors font-medium cursor-pointer"
+                        >
+                          Phân tích cấu trúc ngữ pháp hay
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setChatInput(`Hãy cho tôi một bài tập điền vào chỗ trống ngắn (3 câu) để kiểm tra mức độ hiểu bài nghe này.`)}
+                          disabled={isSendingChat}
+                          className="px-2.5 py-1 bg-[var(--nested-bg)] hover:bg-indigo-500/10 border border-[var(--card-border)] hover:border-indigo-500/30 rounded-lg text-[10px] text-[var(--text-muted)] hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors font-medium cursor-pointer"
+                        >
+                          Tạo bài tập tự kiểm tra
+                        </button>
+                      </div>
+
+                      {/* Input controls form */}
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          handleSendChatMessage();
+                        }}
+                        className="flex gap-2 shrink-0"
+                      >
+                        <input
+                          type="text"
+                          value={chatInput}
+                          onChange={(e) => setChatInput(e.target.value)}
+                          disabled={isSendingChat}
+                          placeholder="Nhập câu hỏi tại đây... (Ví dụ: Dịch hộ tôi đoạn này, giải thích cấu trúc...)"
+                          className="flex-grow bg-[var(--nested-bg)] border border-[var(--card-border)] focus:border-indigo-500 rounded-xl px-4 py-3 text-xs text-[var(--text-app)] placeholder:text-slate-500 outline-none focus:ring-1 focus:ring-indigo-500/50 transition-all"
+                        />
+                        <button
+                          type="submit"
+                          disabled={isSendingChat || !chatInput.trim()}
+                          className="px-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-400 dark:disabled:bg-slate-800 disabled:text-slate-500 disabled:border-transparent text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-indigo-500/30 shadow-lg shadow-indigo-600/25 cursor-pointer"
+                        >
+                          {isSendingChat ? (
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <>
+                              <Send className="w-4 h-4" />
+                              <span>Gửi</span>
+                            </>
+                          )}
+                        </button>
+                      </form>
                     </motion.div>
                   )}
 

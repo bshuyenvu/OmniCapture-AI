@@ -34,3 +34,12 @@ export interface SavedSession {
   summary: string;
   result: AnalysisResult;
 }
+
+export interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  model?: string;
+  timestamp: string;
+}
+
