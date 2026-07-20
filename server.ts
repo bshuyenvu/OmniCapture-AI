@@ -6,6 +6,38 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+// Helper function to safely extract OpenRouter credentials, resolving any accidental swapped config
+function getOpenRouterConfig(defaultModel: string = "google/gemini-2.5-flash") {
+  let apiKey = process.env.OPENROUTER_API_KEY?.trim() || "";
+  let model = process.env.OPENROUTER_MODEL?.trim() || "";
+
+  // If model starts with 'sk-' (usually means user pasted the API key into the model variable)
+  if (model.startsWith("sk-")) {
+    if (!apiKey.startsWith("sk-")) {
+      // If API key is empty or incorrect, swap them
+      const temp = apiKey;
+      apiKey = model;
+      model = (temp && !temp.startsWith("sk-")) ? temp : defaultModel;
+    } else {
+      // Both start with 'sk-', reset model to the default
+      model = defaultModel;
+    }
+  }
+
+  // If API key is not valid but model starts with sk-, reassign
+  if (!apiKey.startsWith("sk-") && model.startsWith("sk-")) {
+    apiKey = model;
+    model = defaultModel;
+  }
+
+  // If we still have an empty or invalid model, use the default
+  if (!model || model.startsWith("sk-")) {
+    model = defaultModel;
+  }
+
+  return { apiKey, model };
+}
+
 const app = express();
 const PORT = 3000;
 
@@ -56,8 +88,7 @@ app.post("/api/analyze-audio", async (req, res) => {
     `;
 
     // 1. If OpenRouter API key is configured, use OpenRouter API
-    const openrouterApiKey = process.env.OPENROUTER_API_KEY;
-    const openrouterModel = process.env.OPENROUTER_MODEL || "google/gemini-2.5-flash";
+    const { apiKey: openrouterApiKey, model: openrouterModel } = getOpenRouterConfig("google/gemini-2.5-flash");
 
     if (openrouterApiKey) {
       console.log(`Analyzing audio using OpenRouter API with model: ${openrouterModel}`);
@@ -238,8 +269,7 @@ app.post("/api/analyze-transcript", async (req, res) => {
     `;
 
     // 1. If OpenRouter API key is configured, use OpenRouter API
-    const openrouterApiKey = process.env.OPENROUTER_API_KEY;
-    const openrouterModel = process.env.OPENROUTER_MODEL || "google/gemini-2.5-flash";
+    const { apiKey: openrouterApiKey, model: openrouterModel } = getOpenRouterConfig("google/gemini-2.5-flash");
 
     if (openrouterApiKey) {
       console.log(`Analyzing transcript using OpenRouter API with model: ${openrouterModel}`);
@@ -381,8 +411,8 @@ app.post("/api/openrouter-chat", async (req, res) => {
       return res.status(400).json({ error: "Câu hỏi (message) không được để trống." });
     }
 
-    // 2. Đọc API key từ secret phía server.
-    const openrouterApiKey = process.env.OPENROUTER_API_KEY;
+    // 2. Đọc API key từ secret phía server (đã tích hợp cơ chế tự phục hồi cấu hình bị nhầm lẫn).
+    const { apiKey: openrouterApiKey, model: openrouterModel } = getOpenRouterConfig("google/gemma-4-26b-a4b-it:free");
 
     // 10. Xử lý thiếu OPENROUTER_API_KEY
     if (!openrouterApiKey) {
@@ -401,7 +431,7 @@ app.post("/api/openrouter-chat", async (req, res) => {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          "model": "google/gemma-4-26b-a4b-it:free",
+          "model": openrouterModel,
           "messages": [
             {
               "role": "system",
